@@ -1,0 +1,355 @@
+#!/usr/bin/env bash
+
+# paragraph text indent spanning chapters? chapter header..
+## versification
+# chapter map for sed
+# empty initial input enteringg index search
+# format array
+# corpus processor,
+# home transation(s)
+# file delineation
+#
+
+g=0
+newline="$'\n'"
+ansiarray=('\033[48;5;236m[%d] %s\033[0m\n' '\033[48;5;239m[%d] %s\033[0m\n')
+BOOKDIRECTORY="/data/data/com.termux/files/home/ebible/corpus/eng-engkjvcpb.txt"
+# Command for output clipboard
+CLIPBOARDCOMMAND='termux-clipboard-set||wl-copy||xclip selection clipboard'
+mapfile -t bibleindex < /data/data/com.termux/files/home/ebible/booktools/index.txt
+indexmap=($(awk '{print $1}' /data/data/com.termux/files/home/ebible/booktools/fixedindex.txt|uniq))
+awkindex=/data/data/com.termux/files/home/ebible/booktools/fixedindex.txt
+echo ${#indexmap[@]}
+bibleindex=("" "${bibleindex[@]}")
+formats=(1)
+((${formats[0]}==1)) && lineseptext="$newline"
+
+
+biblesearch()
+{
+local i=1
+local p=0
+local firstflag=0
+
+while true; do # evals user input, not safe on server
+  IFS=$'\n' read -p "input:  " input
+  [[ -z $input && $i -lt 2 ]] && indexsearch
+  [[ -z $input ]] && break
+  eval "input$i=(\"\$input\")"
+  inputREF+=("{input$i[@]}")
+  ((i++))
+#printf "%s" ${input1[@]} #debug
+done
+
+#printf "%s\n" ${inputref[@]} #debug
+#grepcommand='grep -HinE -d $BOOKDIRECTORY "'
+
+for ref in "${inputREF[@]}"; do
+  eval "local refCOPY=(\"\$$ref\")"
+  grepOR=""
+echo ${refCOPY[@]} #debug
+  for l in ${refCOPY[@]}; do
+    grepOR+="$l|"
+  done
+  grepOR="${grepOR::$((${#grepOR}-1))}"
+    if ((g==0));then
+      grepAND+="grep -HinE "\"$grepOR\"" $BOOKDIRECTORY |" && g=1 
+    else
+      grepAND+="grep -iE "\"$grepOR\"" |"
+    fi
+done
+
+grepcommand+="${grepAND::$((${#grepAND}-1))}"
+printf "\n%s\n" "1-$grepcommand" #debug
+grepOUTstage="$(eval "$grepcommand|sed 's/:/@@/1;s/:/@@/1'")"
+mapfile -t grepOUT <<< "$grepOUTstage"
+
+for line in "${grepOUT[@]}";do
+#printf "%s\n" "3-$line" #debug
+IFS=$'\n' trash1=(${line//@@/$'\n'})
+
+printf "%s\n" "6-${trash[@]}" #debug
+
+eval "
+IFS=$'\n' output$o=(
+\${trash1[0]}
+\${trash1[1]}
+\${bibleindex[${trash1[1]}]::3}
+\${bibleindex[${trash1[1]}]:3:3}
+\${bibleindex[${trash1[1]}]:6:3}
+\${trash1[2]}
+)"
+
+outputREF+=('${output'"$o"'[@]}')
+((o++))
+done
+
+for n in "${outputREF[@]}";do
+  #printf "%s\n" "$n"
+  eval "h=($n)"
+# IFS=$'\n'  junkvar1=(${n//@@/$'\n'})
+# printf "[%s\n" "${junkvar1[1]}" #debug
+  { ((aax==0)) && aax=1 ; } || { aax=0 ; }
+  printf "${ansiarray[$aax]}" "$p" "${h[2]} ${h[3]}:${h[4]} > ${h[5]}"
+  ((p++))
+done
+}
+
+indexsearch()
+{
+read -r -p "Book Chapter Verse-(s): " bookinput chapterinput verseinput
+b="${bookinput:+\$1==\"${indexmap[$((bookinput-1))]}}\""
+c="${chapterinput:+\$2==${chapterinput}}"
+c=${c:=1}
+
+if [[ -z $verseinput ]];then
+  v=1
+elif [[ $verseinput =~ .*-.* ]];then
+  v="\$3>=${verseinput%%-*} && \$3<=${verseinput##*-}"
+elif [[ $verseinput =~ [0-9]+ ]]; then
+  v="\$3==$verseinput"
+fi
+
+if [[ -n $bookinput ]];then
+  awklineoutput=($(awk "$b && $c && $v {print NR}" $awkindex))
+else
+  printf "%s\n" else?
+fi
+echo ${#awklineoutput[@]} ${awklineoutput[0]},${awklineoutput[-1]} ${indexmap[$((bookinput-1))]} $b $c $v
+
+
+sed -n "${awklineoutput[0]},${awklineoutput[-1]}p" "$BOOKDIRECTORY"
+}
+
+vcab()
+{
+local o=0
+argvcab=("$@")
+local optarg=${argvcab[0]}
+rangearg=(${argvcab[@]:1})
+eval "\
+local selectionCOPY=(\"${outputREF[${argvcab[0]}]}\")"
+
+while true; do
+if [[ -z $rangearg ]];then
+  read -p \
+    ["empty to copy selection,\
+  #-= OR #- #+ to search range,\
+  q to exit"\
+     rangearg
+rangearg=($rangearg)
+#else
+fi
+
+#if [[ $optarg =~ [0-9]+ ]];then
+if ((${#rangearg[@]}==0));then
+  echo "$formatted"|$CLIPBOARDCOMMAND && break
+elif ((${#rangearg[@]}==1));then
+  B="$((${selectionCOPY[1]}-${rangearg[0]}))"
+  A="$((${selectionCOPY[1]}+${rangearg[0]}))"
+ # C="$((${selectionCOPY[1]}-${rangearg[0]})),$((${selectionCOPY[1]}+${rangearg[0]}))"
+elif ((${#rangearg[@]}==2));then
+  B="$((${selectionCOPY[1]}-${rangearg[0]}))"
+  A="$((${selectionCOPY[1]}+${rangearg[1]}))"
+else
+  printf nope1; exit
+fi
+#fi
+
+IFS=$'\n' sedOUTstage=($(sed -n "$B,${A}p" "${selectionCOPY[0]}"))
+for ((i=B;i<=A;i++));do
+sedindex+=(${bibleindex[$i]})
+done
+
+#mapfile -t -d $'\n' sedOUT <<< "$sedOUTstage"
+# printf '%s\n' "${sedOUTstage[@]}" #debug
+echo $B-$A selection=${selectionCOPY[1]} file=${selectionCOPY[0]} \#:${#sedOUTstage[@]}, ${#sedindex[@]} rangearg=${rangearg[@]} #debug
+
+for line in "${sedOUTstage[@]}";do
+eval 'sedoutput'"$o"'=(
+ "${sedindex[$o]::3}"
+ "$((10#${sedindex[$o]:3:3}))"
+ "$((10#${sedindex[$o]:6:3}))"
+ "$line"
+)'
+sedoutputREF+=('${sedoutput'"$o"'[@]}')
+((o++))
+done
+
+
+# book name, paragraph text
+
+#IFS=$'\n' trash1=(${line//@@/$'\n'})
+#eval "
+#IFS=$'\n' sedoutput$o=(
+#\${trash1[0]}
+#\${trash1[1]}
+#\${bibleindex[${trash1[1]}]::3}))
+#\$((10#${bibleindex[${trash1[1]}]:3:3}))
+#\$((10#${bibleindex[${trash1[1]}]:6:3}))
+#\${trash1[2]}
+#)"
+
+#echo ${#sedoutputREF[@]} #debug
+
+format "$biblename" "$brange" "$crange" "$vrange" "$trange"
+unset C A B rangearg trange
+#for y in "${sedoutputREF[@]}";do
+#eval "k=($y)"
+## { ((aax==0)) && aax=1 ; } || { aax=0 ; }
+#  printf "${ansiarray[$aax]}" "$p" "${k[2]} ${k[3]}:${k[4]} > ${k[5]}"
+#  ((p++))
+#done
+done
+}
+
+format()
+{
+IFS=$'\n' formatted=$(
+
+  format1=printf "%s\n%s %s:%s\n\t%s" "$biblename" "$brange" "$crange" "$vrange" "$trange"
+
+for ((i=0;i<${#sedoutputREF[@]};i++));do
+  eval '
+  line=("${sedoutputREF['"$i"']")'
+  book=${line[0]}
+    chapter=${line[1]}
+  verse=${line[2]}
+  text=${line[3]}
+
+if [[ $book != $book ]];then
+  string+=""
+
+fi
+done
+
+
+
+eval "\
+vrange=\"${sedoutputREF[0]//@/2}-${sedoutputREF[-1]/@/2}\""
+biblename=${selectionCOPY[0]}
+brange=${selectionCOPY[2]}
+
+
+format2=#printf "%s\n%s %s:%s\n\t%s"
+#printf ""
+)
+
+echo "$formatted"
+
+}
+
+#  printf "\n%s\n" "Selection #, DEFINE CONTEXT HERE, -OR- #Before and #After"
+#  read -p ">" -a argvcab
+#else
+#  argvcab=("${@[@]}")
+#fi
+
+#while true;do
+#  sedA=${}
+#  sedB=${}
+#  sedC=${}
+#  sed -n "${sedC}${sedB}${sedA}p"
+#  printf "\n%s\n" "Selection #, DEFINE CONTEXT HERE, -OR- #Before and #After"
+#  read -r -p ">" -a looprange
+#if [[ ${looprange[@]} =~ [0-9]+ ]]; then
+#  case ${#looprange[@]} in
+#    0) break 1
+#      ;;
+#    1) C=${looprange[0]}
+#      ;;
+#    2) B=${looprange[0]}; A=${looprange[1]}
+#      ;;
+#    *) printf "invalid input, 1 bipolar range or 2 range values, or empty to copy to clipboard"
+#      ;;
+#  esac
+#else
+#  printf "invalid input, 1 bipolar range or 2 range values, or empty to copy to clipboard"
+#fi
+#done
+
+
+xlat()
+{
+printf xlat
+}
+close()
+{
+printf close
+}
+RE()
+{
+printf RE
+}
+
+main()
+{
+
+biblesearch
+IFS=' ' read -p "# to select verse, empty to ??, research???" -a selection
+if [[ ${selection[@]} =~ [0-9]+ ]];then
+vcab "${selection[@]}"
+elif [[ $selection =~ [a] ]];then
+main
+elif [[ -z $selection ]];then
+exit
+fi
+}
+
+main
+#context()
+#{
+#read -p ">" -a menuselection
+# ${menuselection1[0]} in;do
+#if [[ ${menuselection[@]} =~ [0-9]+ ]];
+#  vcab ${menuselection[@]}
+#elif [[ -n ${menuselection} ]];
+#  RE
+#else
+#  exit
+#fi
+#
+#
+#select selection1 in context interlinear research exit;do
+#case ${#argvcab[@]} in
+#  0) printf "\n%s\n" "$menutextcontext" "invalid input"
+#    ;;
+#  1) C=0;CLIPBOARDCOMMAND;RE
+#    ;;
+#  2) C=${argvcab[1]}
+#    ;;
+#  3) B=${argvcab[1]};A=${argvcab[2]}
+#    ;;
+#  *) printf "%s" "invalid input, give selection#, and possibly the range of context (+-# or +# -#)"
+#    ;;
+#esac
+
+#vcab()
+#{
+#if [[ -z $@ ]]; then
+#  read -p "" contextinputread
+#  contextinput=($contextinputread)
+#else
+#  contextinput=(${@[@]:1})
+#fi
+#
+#linenum=${contextinput[0]}
+#
+#
+#if ((#contextinput))<3));then
+#  C =${contextinput[1]}
+#else
+#  B=${contextinput[1]}
+#  A=,${contextinput[2]}
+#fi
+#
+#sedA=${}
+#sedB=${}
+#sedC=${}
+#sed -n "${sedC}${sedB}${sedA}p"
+#}
+#printf '\n%s' 
+
+#grepOR+=
+#grepANDs=+("{ $grepORs ; }")
+#grepcommand="\{ $grepAND \; \}"
