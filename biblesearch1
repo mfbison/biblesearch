@@ -8,28 +8,28 @@
 # corpus processor,
 # home transation(s)
 # file delineation
-#
 
 g=0
-newline="$'\n'"
+newline=$'\n'
 ansiarray=('\033[48;5;236m[%d] %s\033[0m\n' '\033[48;5;239m[%d] %s\033[0m\n')
-BOOKDIRECTORY="/data/data/com.termux/files/home/ebible/corpus/eng-engkjvcpb.txt"
+filearg=$1
+BOOKDIRECTORY="${filearg:=/data/data/com.termux/files/home/ebible/corpus/eng*}" #-engkjvcpb.txt}"
 # Command for output clipboard
 CLIPBOARDCOMMAND='termux-clipboard-set||wl-copy||xclip selection clipboard'
 mapfile -t bibleindex < /data/data/com.termux/files/home/ebible/booktools/index.txt
-indexmap=($(awk '{print $1}' /data/data/com.termux/files/home/ebible/booktools/fixedindex.txt|uniq))
+indexmap=("" $(awk '{print $1}' /data/data/com.termux/files/home/ebible/booktools/fixedindex.txt|uniq))
 awkindex=/data/data/com.termux/files/home/ebible/booktools/fixedindex.txt
+
 echo ${#indexmap[@]}
 bibleindex=("" "${bibleindex[@]}")
-formats=(1)
-((${formats[0]}==1)) && lineseptext="$newline"
-
+formats=(1 1)
+((${formats[0]}==1)) && formatnewline="$newline"
+((${formats[0]}==0)) && whitespace=" "
 
 biblesearch()
 {
 local i=1
 local p=0
-local firstflag=0
 
 while true; do # evals user input, not safe on server
   IFS=$'\n' read -p "input:  " input
@@ -68,7 +68,7 @@ for line in "${grepOUT[@]}";do
 #printf "%s\n" "3-$line" #debug
 IFS=$'\n' trash1=(${line//@@/$'\n'})
 
-printf "%s\n" "6-${trash[@]}" #debug
+#printf "%s\n" "6-${trash[@]}" #debug
 
 eval "
 IFS=$'\n' output$o=(
@@ -86,7 +86,12 @@ done
 
 for n in "${outputREF[@]}";do
   #printf "%s\n" "$n"
-  eval "h=($n)"
+  eval "h=(\"$n\")"
+  if [[ ${h[0]} != $filecheck ]];then
+     filecheck="${h[0]}"
+     printf "\n%s\n" "${h[0]}"
+  fi
+
 # IFS=$'\n'  junkvar1=(${n//@@/$'\n'})
 # printf "[%s\n" "${junkvar1[1]}" #debug
   { ((aax==0)) && aax=1 ; } || { aax=0 ; }
@@ -95,10 +100,17 @@ for n in "${outputREF[@]}";do
 done
 }
 
+zeromutator()
+{
+#hash varvar2var3
+echo zeromutator
+#select config
+}
+
 indexsearch()
 {
 read -r -p "Book Chapter Verse-(s): " bookinput chapterinput verseinput
-b="${bookinput:+\$1==\"${indexmap[$((bookinput-1))]}}\""
+b="${bookinput:+\$1==\"${indexmap[$bookinput]}}\""
 c="${chapterinput:+\$2==${chapterinput}}"
 c=${c:=1}
 
@@ -115,10 +127,28 @@ if [[ -n $bookinput ]];then
 else
   printf "%s\n" else?
 fi
-echo ${#awklineoutput[@]} ${awklineoutput[0]},${awklineoutput[-1]} ${indexmap[$((bookinput-1))]} $b $c $v
-
+echo ${#awklineoutput[@]} ${awklineoutput[0]},${awklineoutput[-1]} ${indexmap[$bookinput]} $b $c $v
 
 sed -n "${awklineoutput[0]},${awklineoutput[-1]}p" "$BOOKDIRECTORY"
+
+#IFS=$'\n' sedOUTstage=($(sed -n "$B,${A}p" "${selectionCOPY[0]}"))
+#for ((i=B;i<=A;i++));do
+#sedindex+=(${bibleindex[$i]})
+#done
+#
+##mapfile -t -d $'\n' sedOUT <<< "$sedOUTstage"
+## printf '%s\n' "${sedOUTstage[@]}" #debug
+## echo $B-$A selection=${selectionCOPY[1]} file=${selectionCOPY[0]} \#:${#sedOUTstage[@]}, ${#sedindex[@]} rangearg=${rangearg[@]} #debug
+#
+#for line in "${sedOUTstage[@]}";do
+#eval 'sedoutput'"$o"'=(
+# "${sedindex[$o]::3}"
+# "$((10#${sedindex[$o]:3:3}))"
+# "$((10#${sedindex[$o]:6:3}))"
+# "$line"
+#)'
+#sedoutputREF+=('${sedoutput'"$o"'[@]}')
+#((o++))
 }
 
 vcab()
@@ -131,19 +161,20 @@ eval "\
 local selectionCOPY=(\"${outputREF[${argvcab[0]}]}\")"
 
 while true; do
+o=0
 if [[ -z $rangearg ]];then
-  read -p \
-    ["empty to copy selection,\
-  #-= OR #- #+ to search range,\
-  q to exit"\
-     rangearg
-rangearg=($rangearg)
+
+echo "empty to copy selection,\
+ #-+ OR #- #+ for range,\
+ q to exit"
+   read -p "> " rangearg
+IFS=" " rangearg=($rangearg)
 #else
 fi
 
 #if [[ $optarg =~ [0-9]+ ]];then
 if ((${#rangearg[@]}==0));then
-  echo "$formatted"|$CLIPBOARDCOMMAND && break
+  format|clipcopy && break
 elif ((${#rangearg[@]}==1));then
   B="$((${selectionCOPY[1]}-${rangearg[0]}))"
   A="$((${selectionCOPY[1]}+${rangearg[0]}))"
@@ -157,13 +188,12 @@ fi
 #fi
 
 IFS=$'\n' sedOUTstage=($(sed -n "$B,${A}p" "${selectionCOPY[0]}"))
-for ((i=B;i<=A;i++));do
-sedindex+=(${bibleindex[$i]})
-done
 
-#mapfile -t -d $'\n' sedOUT <<< "$sedOUTstage"
+sedindex=($(for((i=B;i<=A;i++));do printf "%s\n" "${bibleindex[$i]}"; done))
+# echo 7-${sedindex[@]} #debug
+# mapfile -t -d $'\n' sedOUT <<< "$sedOUTstage"
 # printf '%s\n' "${sedOUTstage[@]}" #debug
-echo $B-$A selection=${selectionCOPY[1]} file=${selectionCOPY[0]} \#:${#sedOUTstage[@]}, ${#sedindex[@]} rangearg=${rangearg[@]} #debug
+# echo $B-$A selection=${selectionCOPY[1]} file=${selectionCOPY[0]} \#:${#sedOUTstage[@]}, ${#sedindex[@]} rangearg=${rangearg[@]} #debug
 
 for line in "${sedOUTstage[@]}";do
 eval 'sedoutput'"$o"'=(
@@ -175,7 +205,6 @@ eval 'sedoutput'"$o"'=(
 sedoutputREF+=('${sedoutput'"$o"'[@]}')
 ((o++))
 done
-
 
 # book name, paragraph text
 
@@ -193,7 +222,7 @@ done
 #echo ${#sedoutputREF[@]} #debug
 
 format "$biblename" "$brange" "$crange" "$vrange" "$trange"
-unset C A B rangearg trange
+unset C A B rangearg trange string CHblock sedoutputREF
 #for y in "${sedoutputREF[@]}";do
 #eval "k=($y)"
 ## { ((aax==0)) && aax=1 ; } || { aax=0 ; }
@@ -205,39 +234,89 @@ done
 
 format()
 {
-IFS=$'\n' formatted=$(
-
-  format1=printf "%s\n%s %s:%s\n\t%s" "$biblename" "$brange" "$crange" "$vrange" "$trange"
+#IFS=$'\n' formatted=$(
+#
+#  format1=printf "%s\n%s %s:%s\n\t%s" "$biblename" "$brange" "$crange" "$vrange" "$trange
+#)"
+# possibility of last line also being chapter change
 
 for ((i=0;i<${#sedoutputREF[@]};i++));do
-  eval '
-  line=("${sedoutputREF['"$i"']")'
-  book=${line[0]}
-    chapter=${line[1]}
+  eval 'line=("'${sedoutputREF[$i]}'")'
+  book=${indexmap[${line[0]}]}
+  chapter=${line[1]}
   verse=${line[2]}
-  text=${line[3]}
+  versification="[${formats[1]:+${line[2]}}] "
+  text="${line[3]}"
 
-if [[ $book != $book ]];then
-  string+=""
+  if ((i==0));then
 
-fi
+    CHblock=("$book" "$chapter" "$verse" "$versification$text$formatnewline$whitespace")
+    chaptercheck=$chapter
+    bookcheck=$book
+    versecheck=$verse
+
+  elif ((verse==1)); then
+    CHblock[2]+="-$versecheck$newline" #verse max
+    versecheck=$verse
+    string+="${CHblock[@]}$CHchangenewline"
+    CHblock[1]=$chapter
+    CHblock[2]="$verse" #lower range
+    CHblock[3]="$versification$text$formatnewline$whitespace"
+    if [[ $book != $bookcheck ]];then
+      bookcheck=$book
+      CHblock[0]="$book$formatnewline"
+    fi
+
+  else
+    versecheck=$verse
+#   chaptercheck="$chapter"
+    CHblock[3]+="$versification$text$formatnewline$whitespace"
+    #CHblock[1]="$chapter"
+  fi
+
+#CHblock[3]+="$versification$text$formatnewline$whitespace"
 done
+CHblock[2]+="-$verse$newline" #final max range
+string+="${CHblock[@]}"
+printf "%s" "$string"
+
+# read -r -p "copy to clip etc? before unset values"
+# unset string CHblock sedoutputREF
+
+#eval "\
+#vrange=\"${sedoutputREF[0]//@/2}-${sedoutputREF[-1]/@/2}\""
+#biblename=${selectionCOPY[0]}
+#brange=${selectionCOPY[2]}
 
 
-
-eval "\
-vrange=\"${sedoutputREF[0]//@/2}-${sedoutputREF[-1]/@/2}\""
-biblename=${selectionCOPY[0]}
-brange=${selectionCOPY[2]}
-
-
-format2=#printf "%s\n%s %s:%s\n\t%s"
+#format2=#printf "%s\n%s %s:%s\n\t%s"
 #printf ""
-)
 
 echo "$formatted"
 
 }
+
+clipcopy() {
+  if command -v pbcopy >/dev/null 2>&1; then
+    pbcopy
+  elif command -v wl-copy >/dev/null 2>&1; then
+    wl-copy
+  elif command -v xclip >/dev/null 2>&1; then
+    xclip -selection clipboard
+  elif command -v xsel >/dev/null 2>&1; then
+    xsel --clipboard --input
+  elif command -v clip.exe >/dev/null 2>&1; then
+    clip.exe
+  elif command -v clip >/dev/null 2>&1; then
+    clip
+  elif command -v termux-clipboard-set >/dev/null 2>&1; then
+    termux-clipboard-set
+  else
+    echo "Error: No clipboard utility found." >&2
+    return 1
+  fi
+}
+
 
 #  printf "\n%s\n" "Selection #, DEFINE CONTEXT HERE, -OR- #Before and #After"
 #  read -p ">" -a argvcab
@@ -267,7 +346,6 @@ echo "$formatted"
 #  printf "invalid input, 1 bipolar range or 2 range values, or empty to copy to clipboard"
 #fi
 #done
-
 
 xlat()
 {
